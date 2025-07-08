@@ -143,13 +143,6 @@ cython_debug/
 *.ckpt
 model_cache/
 checkpoints/
-clean_checkpoints/
-fresh_checkpoints/
-data/
-clean_test_data/
-fresh_test_data/
-training_data/
-training_corpus/
 
 # Blockchain files
 chain_data/
@@ -159,7 +152,6 @@ blocks/
 *.chain
 
 # Model files
-models/
 pretrained/
 *.safetensors
 *.bin

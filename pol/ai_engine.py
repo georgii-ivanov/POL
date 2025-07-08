@@ -2305,3 +2305,31 @@ class AITrainingEngine:
         except Exception as e:
             logger.error(f"Error syncing blockchain with peers: {e}")
             return False 
+
+    def generate_text(self, prompt: str, max_length: int = 100, temperature: float = 0.7) -> str:
+        try:
+            inputs = self.tokenizer(prompt, return_tensors='pt', truncation=True)
+            input_ids = inputs['input_ids'].to(self.device)
+            if hasattr(self.model, 'generate'):
+                generated_tokens = self.model.generate(
+                    input_ids=input_ids,
+                    max_new_tokens=max_length,
+                    temperature=temperature,
+                    do_sample=temperature > 0,
+                    top_p=0.9
+                )
+            elif hasattr(self.model, 'generate_with_consciousness'):
+                result = self.model.generate_with_consciousness(
+                    input_ids=input_ids,
+                    max_new_tokens=max_length,
+                    temperature=temperature,
+                    return_insights=False
+                )
+                generated_tokens = result.get('generated_tokens', input_ids)
+            else:
+                return ""
+            generated_text = self.tokenizer.decode(generated_tokens[0][input_ids.shape[1]:], skip_special_tokens=True)
+            return generated_text.strip()
+        except Exception as e:
+            logger.error(f"Error generating text: {e}")
+            return ""

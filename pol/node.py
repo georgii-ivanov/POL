@@ -112,10 +112,13 @@ class ProofOfLearningNode:
                     type=MessageType.PEER_DISCOVERY,
                     from_node=self.node_id,
                     data={
-                        'node_type': 'authority' if self.config.is_authority else 'worker',
-                        'training_enabled': self.config.training_enabled,
-                        'seeking_sync': True,
-                        'discovery_attempt': discovery_attempts + 1
+                        'node_id': self.node_id,
+                        'address': self.network.host,
+                        'port': self.network.port,
+                        'public_key': getattr(self.wallet, 'public_key', ''),
+                        'is_authority': self.config.is_authority,
+                        'reputation': 1.0,
+                        'training_capacity': 1.0
                     },
                     timestamp=time.time()
                 )
@@ -185,8 +188,8 @@ class ProofOfLearningNode:
                     timestamp=time.time()
                 )
                 
-                if hasattr(self.network, 'send_to_peer'):
-                    await self.network.send_to_peer(peer_id, blockchain_request)
+                if hasattr(self.network, 'send_message_to_peer'):
+                    await self.network.send_message_to_peer(peer_id, blockchain_request)
                 
                 logger.info(f"📡 Requested blockchain sync from peer {peer_id}")
             
@@ -218,8 +221,8 @@ class ProofOfLearningNode:
                     timestamp=time.time()
                 )
                 
-                if hasattr(self.network, 'send_to_peer'):
-                    await self.network.send_to_peer(peer_id, model_request)
+                if hasattr(self.network, 'send_message_to_peer'):
+                    await self.network.send_message_to_peer(peer_id, model_request)
                 
                 logger.info(f"🧠 Requested model state from peer {peer_id} (current epoch: {current_epoch})")
             
@@ -255,8 +258,8 @@ class ProofOfLearningNode:
                     timestamp=time.time()
                 )
                 
-                if hasattr(self.network, 'send_to_peer'):
-                    await self.network.send_to_peer(peer_id, data_request)
+                if hasattr(self.network, 'send_message_to_peer'):
+                    await self.network.send_message_to_peer(peer_id, data_request)
                 
                 logger.info(f"📚 Requested training data from peer {peer_id}")
             
