@@ -230,3 +230,6 @@ mlruns/
 *.api_key
 api_keys/
 tokens/ 
+
+# Generated data
+data
