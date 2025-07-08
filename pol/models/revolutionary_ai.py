@@ -552,6 +552,8 @@ class RevolutionaryAIModel(nn.Module):
         
         # Language modeling head
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        # Tie weights
+        self.lm_head.weight = self.embeddings.weight
         
         # Global consciousness tracker
         self.global_consciousness = nn.Parameter(torch.zeros(config.consciousness_dim))
@@ -573,13 +575,13 @@ class RevolutionaryAIModel(nn.Module):
         
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            # Proper transformer initialization (like GPT models)
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)  # Standard for transformers
+            # Smaller initialization for stability 
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.01)  # Reduced from 0.02
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            # Proper embedding initialization
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            # Smaller embedding initialization
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.01)  # Reduced from 0.02
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
@@ -748,6 +750,8 @@ class SimpleTransformerModel(nn.Module):
         
         self.ln_f = nn.LayerNorm(hidden_size)
         self.lm_head = nn.Linear(hidden_size, vocab_size, bias=False)
+        # Tie weights
+        self.lm_head.weight = self.embeddings.weight
         
         # Initialize with very small weights
         self.apply(self._init_weights)

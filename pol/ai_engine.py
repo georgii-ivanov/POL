@@ -1188,7 +1188,8 @@ class AITrainingEngine:
                     
                     # Configure advanced tokenizer settings
                     if tokenizer.pad_token is None:
-                        tokenizer.pad_token = tokenizer.eos_token
+                        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+                        tokenizer.pad_token = '[PAD]'  # Ensure PAD exists
                     
                     # Add special tokens for advanced functionality
                     special_tokens = {
@@ -2171,7 +2172,11 @@ class AITrainingEngine:
                         batch_processing_errors += 1
                         continue
                     
-                    targets = input_ids[:, 1:].contiguous()
+                    targets = input_ids[:, 1:].clone().contiguous()
+                    # Mask PAD tokens so they are ignored in loss
+                    pad_id = getattr(self.tokenizer, 'pad_token_id', None)
+                    if pad_id is not None:
+                        targets[targets == pad_id] = -100
                     logits_truncated = logits[:, :-1, :].contiguous()
                     
                     logger.debug(f"🔍 DEBUG: Targets shape: {targets.shape}, Logits shape: {logits_truncated.shape}")
