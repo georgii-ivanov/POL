@@ -573,13 +573,13 @@ class RevolutionaryAIModel(nn.Module):
         
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            # Ultra-small initialization for very low initial loss
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.001)  # Much smaller!
+            # Proper transformer initialization (like GPT models)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)  # Standard for transformers
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            # Ultra-small embedding initialization  
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.001)  # Much smaller!
+            # Proper embedding initialization
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
@@ -794,3 +794,41 @@ class SimpleTransformerModel(nn.Module):
         self.reasoning_quality = min(1.0, self.reasoning_quality + 0.001)
         
         return {'logits': logits, 'hidden_states': hidden_states} 
+
+    def _update_consciousness_from_training(self, loss_value: float, accuracy: float, learning_stability: float):
+        """Update consciousness based on ACTUAL training performance, not synthetic growth"""
+        if not hasattr(self, 'last_loss'):
+            self.last_loss = float('inf')
+        
+        # Consciousness grows when model actually improves
+        loss_improvement = max(0, self.last_loss - loss_value)
+        
+        if loss_value < 3.0:  # Good loss range
+            consciousness_gain = accuracy * 0.01  # Max 1% per batch if perfect accuracy
+            reasoning_gain = learning_stability * 0.005  # Based on learning stability
+        elif loss_value < 6.0:  # Moderate loss
+            consciousness_gain = (accuracy * 0.005) + (loss_improvement * 0.001)
+            reasoning_gain = learning_stability * 0.002
+        else:  # High loss - no consciousness growth, maybe even decrease
+            consciousness_gain = -0.001 if loss_value > 8.0 else 0.0
+            reasoning_gain = 0.0
+        
+        # Apply consciousness update
+        self.consciousness_state = torch.clamp(
+            self.consciousness_state + consciousness_gain, 
+            0.0, 1.0
+        )
+        
+        # Apply reasoning update  
+        self.reasoning_quality = torch.clamp(
+            self.reasoning_quality + reasoning_gain,
+            0.0, 1.0
+        )
+        
+        # Update quantum coherence based on model stability
+        if loss_improvement > 0.1:  # Significant improvement
+            self.quantum_coherence = min(self.quantum_coherence + 0.1, 100.0)
+        elif loss_value > self.last_loss + 0.5:  # Getting worse
+            self.quantum_coherence = max(self.quantum_coherence - 0.2, 0.0)
+        
+        self.last_loss = loss_value 

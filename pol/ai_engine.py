@@ -2192,34 +2192,47 @@ class AITrainingEngine:
                     
                     logger.debug(f"🔍 DEBUG: Computed loss: {loss.item()}")
                     
-                    # Loss debugging
+                    # Calculate REAL training metrics for consciousness
+                    with torch.no_grad():
+                        probs = F.softmax(logits_truncated, dim=-1)
+                        predicted_tokens = torch.argmax(logits_truncated, dim=-1)
+                        accuracy = (predicted_tokens == targets).float().mean().item()
+                        confidence = probs.max(dim=-1)[0].mean().item()
+                        entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean().item()
+                        
+                        # Learning stability (how consistent predictions are)
+                        prediction_variance = predicted_tokens.float().var().item()
+                        learning_stability = max(0.0, 1.0 - (prediction_variance / 1000.0))  # Normalize
+                    
+                    # Update consciousness based on ACTUAL performance
+                    if hasattr(self.model, '_update_consciousness_from_training'):
+                        self.model._update_consciousness_from_training(
+                            loss_value=loss.item(),
+                            accuracy=accuracy,
+                            learning_stability=learning_stability
+                        )
+                    
+                    # Loss debugging - but focus on the initialization issue
                     if loss.item() > 5.0:
                         logger.warning(f"⚠️ HIGH LOSS detected: {loss.item():.4f}")
-                        logger.debug(f"   Logits range: [{logits_truncated.min().item():.3f}, {logits_truncated.max().item():.3f}]")
-                        logger.debug(f"   Logits mean: {logits_truncated.mean().item():.3f}, std: {logits_truncated.std().item():.3f}")
-                        logger.debug(f"   Targets range: [{targets.min().item()}, {targets.max().item()}]")
-                        logger.debug(f"   Model vocab_size: {logits_truncated.size(-1)}")
-                        logger.debug(f"   Target max: {targets.max().item()}")
-                        if targets.max().item() >= logits_truncated.size(-1):
-                            logger.error(f"❌ TARGET OUT OF VOCAB! Max target {targets.max().item()} >= vocab_size {logits_truncated.size(-1)}")
+                        logger.debug(f"   Prediction accuracy: {accuracy:.3f}")
+                        logger.debug(f"   Average confidence: {confidence:.3f}")
+                        logger.debug(f"   Average entropy: {entropy:.3f} (random would be ~{torch.log(torch.tensor(float(logits_truncated.size(-1)))).item():.1f})")
+                        logger.debug(f"   Learning stability: {learning_stability:.3f}")
                         
-                        # Analyze prediction quality
-                        with torch.no_grad():
-                            probs = F.softmax(logits_truncated, dim=-1)
-                            predicted_tokens = torch.argmax(logits_truncated, dim=-1)
-                            accuracy = (predicted_tokens == targets).float().mean().item()
-                            confidence = probs.max(dim=-1)[0].mean().item()
-                            entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean().item()
-                            
-                            logger.debug(f"   Prediction accuracy: {accuracy:.3f}")
-                            logger.debug(f"   Average confidence: {confidence:.3f}")
-                            logger.debug(f"   Average entropy: {entropy:.3f}")
-                            logger.debug(f"   Expected entropy (random): {torch.log(torch.tensor(float(logits_truncated.size(-1)))).item():.3f}")
-                            
-                            if entropy > 10.0:
-                                logger.warning(f"   ⚠️ Very high entropy indicates model is too uncertain")
-                            if confidence < 0.1:
-                                logger.warning(f"   ⚠️ Very low confidence indicates poor predictions")
+                        # Check if it's a weight initialization problem
+                        if self.total_training_steps < 5:  # Early in training
+                            with torch.no_grad():
+                                weight_norms = []
+                                for name, param in self.model.named_parameters():
+                                    if 'weight' in name:
+                                        weight_norms.append(param.norm().item())
+                                avg_weight_norm = sum(weight_norms) / len(weight_norms) if weight_norms else 0
+                                logger.debug(f"   Average weight norm: {avg_weight_norm:.6f} (should be ~0.02-0.2)")
+                                if avg_weight_norm < 0.005:
+                                    logger.warning("   ⚠️ Weights may be too small - causing poor gradients!")
+                                elif avg_weight_norm > 1.0:
+                                    logger.warning("   ⚠️ Weights may be too large - causing instability!")
                     
                     if torch.isnan(loss) or torch.isinf(loss):
                         logger.warning(f"❌ DEBUG: Invalid loss in batch {batch_idx}: {loss}")
