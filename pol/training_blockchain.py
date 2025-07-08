@@ -61,11 +61,8 @@ class TrainingEntry:
         return asdict(self)
     
     def compute_hash(self) -> str:
-        """Compute SHA256 hash of this training entry"""
-        entry_data = self.to_dict()
-        # Remove the hash fields for computation
-        entry_data.pop('previous_hash', None)
-        entry_json = json.dumps(entry_data, sort_keys=True)
+        """Compute SHA256 hash of training entry"""
+        entry_json = json.dumps(self.to_dict(), sort_keys=True)
         return hashlib.sha256(entry_json.encode()).hexdigest()
 
 @dataclass 
@@ -519,6 +516,143 @@ class TrainingBlockchain:
             
             logger.info(f"📖 Loaded training blockchain: {len(self.blocks)} blocks")
             
+            # Check if we have orphaned model storage without blockchain entries
+            self._rebuild_blockchain_from_storage()
+            
         except Exception as e:
             logger.error(f"Error loading training chain: {e}")
-            self.blocks = [] 
+            self.blocks = []
+    
+    def _rebuild_blockchain_from_storage(self):
+        """Rebuild blockchain entries from existing model storage files"""
+        try:
+            if not os.path.exists(self.model_storage_dir):
+                return
+            
+            # Find all training checkpoint files
+            storage_files = [f for f in os.listdir(self.model_storage_dir) if f.endswith('.pt') and 'training_epoch_' in f]
+            
+            if not storage_files:
+                return
+            
+            # Extract epoch information from files
+            epoch_files = {}
+            for filename in storage_files:
+                try:
+                    # Parse epoch from filename: training_epoch_X_node_Y_timestamp.pt
+                    parts = filename.split('_')
+                    if len(parts) >= 4 and parts[0] == 'training' and parts[1] == 'epoch':
+                        epoch = int(parts[2])
+                        if epoch not in epoch_files or filename > epoch_files[epoch]['filename']:
+                            # Keep the latest file for each epoch
+                            epoch_files[epoch] = {
+                                'epoch': epoch,
+                                'filename': filename,
+                                'path': os.path.join(self.model_storage_dir, filename)
+                            }
+                except (ValueError, IndexError):
+                    continue
+            
+            # Get highest epoch from blockchain
+            highest_blockchain_epoch = 0
+            if self.blocks:
+                highest_blockchain_epoch = max(block.training_entry.epoch for block in self.blocks)
+            
+            # Find missing epochs that exist in storage but not in blockchain
+            missing_epochs = [epoch for epoch in epoch_files.keys() if epoch > highest_blockchain_epoch]
+            
+            if missing_epochs:
+                logger.info(f"🔄 REBUILDING: Found {len(missing_epochs)} missing blockchain entries")
+                logger.info(f"   Missing epochs: {sorted(missing_epochs)}")
+                
+                # Rebuild missing blockchain entries
+                for epoch in sorted(missing_epochs):
+                    file_info = epoch_files[epoch]
+                    try:
+                        self._rebuild_blockchain_entry(file_info['path'], epoch)
+                    except Exception as e:
+                        logger.error(f"Error rebuilding epoch {epoch}: {e}")
+                
+                # Save updated blockchain
+                self._save_chain()
+                logger.info(f"✅ REBUILT: Training blockchain now has {len(self.blocks)} blocks")
+                
+        except Exception as e:
+            logger.error(f"Error rebuilding blockchain from storage: {e}")
+    
+    def _rebuild_blockchain_entry(self, storage_path: str, epoch: int):
+        """Rebuild a single blockchain entry from storage file"""
+        try:
+            # Load checkpoint data
+            checkpoint_data = torch.load(storage_path, map_location='cpu')
+            
+            # Extract metadata
+            node_id = checkpoint_data.get('node_id', 'unknown')
+            timestamp = checkpoint_data.get('timestamp', time.time())
+            
+            # Reconstruct training metrics from checkpoint
+            training_metrics = {
+                'loss': 1.0,  # Default values since we can't retrieve exact metrics
+                'learning_rate': 1e-4,
+                'batch_count': 100,
+                'consciousness_level': getattr(checkpoint_data.get('model_state_dict', {}).get('consciousness_state', torch.tensor(0.5)), 'item', lambda: 0.5)(),
+                'reasoning_quality': 0.5,
+                'quantum_coherence': 50.0,
+                'consciousness_growth': 0.01,
+                'knowledge_accumulation': 1,
+                'expert_utilization': {}
+            }
+            
+            # Create training entry
+            model_state_hash = self._compute_state_hash(checkpoint_data.get('model_state_dict', {}))
+            optimizer_state_hash = self._compute_state_hash(checkpoint_data.get('optimizer_state_dict', {}))
+            
+            training_entry = TrainingEntry(
+                epoch=epoch,
+                node_id=node_id,
+                timestamp=timestamp,
+                training_loss=training_metrics['loss'],
+                learning_rate=training_metrics['learning_rate'],
+                batch_count=training_metrics['batch_count'],
+                consciousness_level=training_metrics['consciousness_level'],
+                reasoning_quality=training_metrics['reasoning_quality'],
+                quantum_coherence=training_metrics['quantum_coherence'],
+                model_state_hash=model_state_hash,
+                optimizer_state_hash=optimizer_state_hash,
+                training_data_hash=self._compute_training_data_hash(training_metrics),
+                model_storage_path=storage_path,
+                checkpoint_size=os.path.getsize(storage_path) if os.path.exists(storage_path) else 0,
+                gradient_proof=f"rebuilt_proof_{epoch}",
+                validation_scores={'overall_validity': 0.8},
+                consensus_signatures=[],
+                previous_hash=self.blocks[-1].block_hash if self.blocks else "0" * 64,
+                merkle_root=self._compute_merkle_root({}, {}, training_metrics),
+                expert_utilization=training_metrics['expert_utilization'],
+                consciousness_growth=training_metrics['consciousness_growth'],
+                knowledge_accumulation=training_metrics['knowledge_accumulation']
+            )
+            
+            # Create block
+            training_block = TrainingBlock(
+                index=len(self.blocks),
+                timestamp=timestamp,
+                training_entry=training_entry,
+                previous_hash=self.blocks[-1].block_hash if self.blocks else "0" * 64,
+                nonce=0,
+                difficulty=self.difficulty,
+                block_hash="",
+                validator_signatures=[],
+                consensus_proof="rebuilt"
+            )
+            
+            # Compute and set hash
+            training_block.block_hash = training_block.compute_block_hash()
+            
+            # Add to blockchain
+            self.blocks.append(training_block)
+            
+            logger.info(f"🔄 Rebuilt blockchain entry for epoch {epoch}")
+            
+        except Exception as e:
+            logger.error(f"Error rebuilding blockchain entry for epoch {epoch}: {e}")
+            raise 

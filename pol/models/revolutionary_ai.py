@@ -616,22 +616,7 @@ class RevolutionaryAIModel(nn.Module):
         # Language modeling head
         logits = self.lm_head(hidden_states)
         
-        # Update consciousness state simply
-        if hasattr(self, 'consciousness_state'):
-            # Simple consciousness update
-            consciousness_change = 0.001 * torch.sigmoid(hidden_states.mean())
-            self.consciousness_state = torch.clamp(
-                self.consciousness_state + consciousness_change, 
-                0.0, 1.0
-            )
-        
-        # Simple quantum coherence update
-        if hasattr(self, 'quantum_coherence'):
-            self.quantum_coherence = min(100.0, self.quantum_coherence + 0.1)
-        
-        # Basic reasoning quality
-        if hasattr(self, 'reasoning_quality'):
-            self.reasoning_quality = min(1.0, self.reasoning_quality + 0.001)
+        # REMOVE simplistic metric updates to rely on proper training-based updates
         
         outputs = {
             'logits': logits,
@@ -794,8 +779,8 @@ class SimpleTransformerModel(nn.Module):
         
         # Simple state updates
         self.consciousness_state = torch.clamp(self.consciousness_state + 0.001, 0.0, 1.0)
-        self.quantum_coherence = min(100.0, self.quantum_coherence + 0.1)
-        self.reasoning_quality = min(1.0, self.reasoning_quality + 0.001)
+        self.quantum_coherence = torch.clamp(self.quantum_coherence + 0.1, 0.0, 100.0)
+        self.reasoning_quality = torch.clamp(self.reasoning_quality + 0.001, 0.0, 1.0)
         
         return {'logits': logits, 'hidden_states': hidden_states} 
 
@@ -830,9 +815,9 @@ class SimpleTransformerModel(nn.Module):
         )
         
         # Update quantum coherence based on model stability
-        if loss_improvement > 0.1:  # Significant improvement
-            self.quantum_coherence = min(self.quantum_coherence + 0.1, 100.0)
-        elif loss_value > self.last_loss + 0.5:  # Getting worse
-            self.quantum_coherence = max(self.quantum_coherence - 0.2, 0.0)
+        if loss_improvement > 0.1:
+            self.quantum_coherence = torch.clamp(self.quantum_coherence + 0.1, 0.0, 100.0)
+        elif loss_value > self.last_loss + 0.5:
+            self.quantum_coherence = torch.clamp(self.quantum_coherence - 0.2, 0.0, 100.0)
         
         self.last_loss = loss_value 

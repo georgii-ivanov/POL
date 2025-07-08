@@ -10,6 +10,7 @@ import os
 import time
 import json
 import hashlib
+import math
 from typing import Dict, List, Optional, Tuple, Any
 from .models.revolutionary_ai import RevolutionaryAIModel, RevolutionaryAIConfig, SimpleTransformerModel
 from .models.advanced_gpt import AdvancedGPTModel
@@ -1225,6 +1226,8 @@ class AITrainingEngine:
             if hasattr(self.tokenizer, 'vocab_size'):
                 old_vocab_size = self.vocab_size
                 self.vocab_size = self.tokenizer.vocab_size
+                # Expected random-guess loss (natural-log). Used for dynamic warning threshold
+                self._random_loss_threshold = math.log(self.vocab_size)
                 logger.info(f"🔄 Updated vocab_size to match advanced tokenizer: {self.vocab_size}")
                 
                 # Demonstrate tokenizer capabilities
@@ -2063,7 +2066,7 @@ class AITrainingEngine:
                             data_for_training.append(tokens)
                             logger.info(f"✅ DEBUG: Added sample {i} to training data ({len(tokens)} tokens)")
                             
-                            max_batches = getattr(self.config, 'max_batches_per_epoch', None) if hasattr(self.config, 'max_batches_per_epoch') else self.config.get('max_batches_per_epoch', 10) if hasattr(self.config, 'get') else 10
+                            max_batches = getattr(self, 'device_contribution', {}).get('max_batches_per_epoch', self.config.get('max_batches_per_epoch', 10))
                             if len(data_for_training) >= max_batches:
                                 logger.info(f"🔍 DEBUG: Reached max_batches_per_epoch limit ({len(data_for_training)})")
                                 break
@@ -2177,6 +2180,7 @@ class AITrainingEngine:
                     pad_id = getattr(self.tokenizer, 'pad_token_id', None)
                     if pad_id is not None:
                         targets[targets == pad_id] = -100
+                    
                     logits_truncated = logits[:, :-1, :].contiguous()
                     
                     logger.debug(f"🔍 DEBUG: Targets shape: {targets.shape}, Logits shape: {logits_truncated.shape}")
@@ -2191,7 +2195,7 @@ class AITrainingEngine:
                     # Basic cross entropy loss without any modifications
                     loss = F.cross_entropy(
                         logits_truncated.view(-1, logits_truncated.size(-1)), 
-                        targets.view(-1),
+                        targets.view(-1), 
                         ignore_index=-100
                     )
                     
@@ -2217,8 +2221,9 @@ class AITrainingEngine:
                             learning_stability=learning_stability
                         )
                     
-                    # Loss debugging - but focus on the initialization issue
-                    if loss.item() > 5.0:
+                    # Loss debugging – warn only if worse than random baseline
+                    random_loss = getattr(self, '_random_loss_threshold', math.log(self.tokenizer.vocab_size))
+                    if loss.item() > random_loss + 0.1:
                         logger.warning(f"⚠️ HIGH LOSS detected: {loss.item():.4f}")
                         logger.debug(f"   Prediction accuracy: {accuracy:.3f}")
                         logger.debug(f"   Average confidence: {confidence:.3f}")
@@ -2267,7 +2272,7 @@ class AITrainingEngine:
                             import gc
                             gc.collect()
                     
-                    # Gradient accumulation for larger effective batch size
+                                                            # Gradient accumulation for larger effective batch size
                     if accumulation_count == 0:
                         self.optimizer.zero_grad()
                     
@@ -3092,7 +3097,8 @@ class AITrainingEngine:
                 'max_seq_length': 2048,
                 'gradient_accumulation': 2,
                 'contribution_tier': 'whale',      # Like Bitcoin whales
-                'expected_blocks_per_hour': 12     # High mining power
+                'expected_blocks_per_hour': 12,
+                'max_batches_per_epoch': 1000
             }
         elif memory_gb >= 16:  # Mid-range: Good contribution
             contribution = {
@@ -3100,7 +3106,8 @@ class AITrainingEngine:
                 'max_seq_length': 1024,
                 'gradient_accumulation': 4,
                 'contribution_tier': 'miner',      # Regular miners
-                'expected_blocks_per_hour': 6
+                'expected_blocks_per_hour': 6,
+                'max_batches_per_epoch': 500
             }
         elif memory_gb >= 8:  # Basic: Still valuable
             contribution = {
@@ -3108,7 +3115,8 @@ class AITrainingEngine:
                 'max_seq_length': 512,
                 'gradient_accumulation': 8,
                 'contribution_tier': 'participant', # Small participants
-                'expected_blocks_per_hour': 2
+                'expected_blocks_per_hour': 2,
+                'max_batches_per_epoch': 200
             }
         else:  # Mobile: Minimal but still counts
             contribution = {
