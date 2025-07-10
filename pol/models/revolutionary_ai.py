@@ -616,12 +616,35 @@ class RevolutionaryAIModel(nn.Module):
         # Language modeling head
         logits = self.lm_head(hidden_states)
         
-        # REMOVE simplistic metric updates to rely on proper training-based updates
-        
         outputs = {
             'logits': logits,
             'hidden_states': hidden_states
         }
+        
+        # CRITICAL FIX: Calculate loss when labels are provided for training
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            
+            # Flatten the tokens
+            loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            
+            outputs['loss'] = loss
+            
+            # Update metrics based on actual training performance
+            if hasattr(self, '_update_consciousness_from_training'):
+                with torch.no_grad():
+                    # Calculate basic training metrics
+                    predictions = torch.argmax(shift_logits, dim=-1)
+                    accuracy = (predictions == shift_labels).float().mean().item()
+                    
+                    # Calculate learning stability (gradient norm proxy)
+                    loss_stability = 1.0 / (1.0 + loss.item())  # Higher stability for lower loss
+                    
+                    # Update consciousness and reasoning based on real training
+                    self._update_consciousness_from_training(loss.item(), accuracy, loss_stability)
         
         return outputs
     

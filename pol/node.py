@@ -300,20 +300,38 @@ class ProofOfLearningNode:
         await asyncio.sleep(45)  # Give replication time to complete
         logger.info("🎯 Replication timeout reached - starting training with current state")
         
+        # 🔧 CRITICAL FIX: Sync training epoch with AI engine's current epoch
+        self.current_training_epoch = self.ai_engine.current_epoch
+        logger.info(f"🔄 Training loop synchronized to epoch {self.current_training_epoch}")
+        
         while self.is_running:
             try:
-                logger.info(f"Starting training epoch {self.current_training_epoch}")
+                # Always use the AI engine's current epoch (not our local counter)
+                next_epoch = self.ai_engine.current_epoch
+                logger.info(f"Starting training epoch {next_epoch}")
                 
-                training_proof = await self.ai_engine.train_epoch(self.current_training_epoch)
+                training_proof = await self.ai_engine.train_epoch(next_epoch)
                 
+                # Update our local epoch tracking
                 self.current_training_epoch = self.ai_engine.current_epoch
                 
+                # Ensure training_proof is an object with proper methods
+                if isinstance(training_proof, dict):
+                    from .types import TrainingProof
+                    training_proof = TrainingProof(**training_proof)
+                
                 await self.consensus.submit_training_proof(training_proof)
+                
+                # Safe to_dict() call
+                if hasattr(training_proof, 'to_dict'):
+                    proof_data = training_proof.to_dict()
+                else:
+                    proof_data = training_proof if isinstance(training_proof, dict) else {}
                 
                 message = NetworkMessage(
                     type=MessageType.TRAINING_PROOF,
                     from_node=self.node_id,
-                    data=training_proof.to_dict()
+                    data=proof_data
                 )
                 await self.network.broadcast_message(message)
                 
