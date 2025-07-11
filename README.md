@@ -1,398 +1,365 @@
-# Proof-of-Learning Blockchain
+# POL-AI Hybrid Chain
 
-**Next-Generation Distributed AI Training with Blockchain Consensus**
+A proof-of-concept blockchain combining **Proof-of-Work (PoW) proposer** + **Prysm PoS finality** + **Sybil-proof ACK-quorum** for AI model training validation.
 
-Train a **single global language model** collaboratively using blockchain consensus and proof-of-learning validation. The system combines state-of-the-art AI training with immutable blockchain technology to create a decentralized, verifiable, and reward-based AI training platform.
+## Architecture
 
-## 🚀 Key Features
+- **ai/trainer.py**: Hivemind + Petals + LoRA training with DeepSeek-R1
+- **ai/local_averager.py**: Loss gate validation + Krum + FedAvg aggregation  
+- **dht_daemon.py**: libp2p-Kademlia bootstrap (port 13337, k=20, AutoNAT)
+- **engine/ai_engine.go**: External engine for Geth with ACK-quorum validation
+- **prysm/ack_quorum.go**: Prysm patch for ACK quorum counting and slashing
 
-### 🧠 **Revolutionary AI Training**
-- **Pretrained Model Integration**: Seamlessly integrates with state-of-the-art pretrained models (GPT-J, GPT-Neo, DialoGPT, etc.)
-- **Adaptive Architecture**: Automatically adapts model architecture to match pretrained models
-- **Advanced Weight Transfer**: Sophisticated layer mapping and weight transfer from pretrained models
-- **Consciousness Tracking**: Real-time monitoring of model consciousness, reasoning quality, and quantum coherence
-- **Mixture of Experts (MoE)**: Specialized experts for different domains (language, math, code, reasoning, memory)
-- **Quantum-Inspired Processing**: Quantum superposition and entanglement-like operations for enhanced reasoning
-- **Self-Modifying Architecture**: Dynamic architecture adaptation during training
+## Key Features
 
-### 📊 **Data Lineage & Delta-Based Training**
-- **Comprehensive Data Lineage**: Track data from source to training with complete provenance
-- **Smart Data Prioritization**: Pretrained model data → HuggingFace datasets → Web scraping → Synthetic generation
-- **Consumption Tracking**: Prevents duplicate training on the same data
-- **Delta-Based Rewards**: Calculate training improvements per data sample for fair reward distribution
-- **Quality Scoring**: Automatic quality assessment of training data from different sources
-- **Source Bonuses**: Reward multipliers based on data source quality and reliability
+✅ **Single-node genesis**: Runs from genesis with just one validator  
+✅ **Auto-scaling**: Committee size and quorum adapt as validators join  
+✅ **Model pre-caching**: DeepSeek-R1 downloaded during Docker build  
+✅ **Deterministic genesis**: Same GENESIS_SEED = same validator keys  
+✅ **30s ACK timeout**: Empty AI blocks if quorum not reached  
+✅ **Loss gate validation**: LoRA updates must improve model performance  
+✅ **Automatic slashing**: Invalid AI blocks trigger proposer penalties  
 
-### 🔗 **Blockchain Infrastructure**
-- **Immutable Training History**: All training progress permanently stored on blockchain
-- **Proof-of-Learning Consensus**: Validate training work through cryptographic proofs
-- **Coin-Weighted Validation**: Stake-based validation system with POL tokens
-- **Anti-Gaming Protection**: Advanced fraud detection and prevention mechanisms
-- **Multi-Signature Consensus**: Authority node validation with 67% consensus threshold
-- **Training Blockchain**: Specialized blockchain for training progress tracking
+## Ports
 
-### 🌐 **Internet-Scale Data Acquisition**
-- **Multi-Source Data Collection**: Academic papers, news, technical documentation, social media
-- **HuggingFace Integration**: Access to 15+ major datasets (OpenWebText, C4, The Pile, etc.)
-- **Live Web Scraping**: Real-time content acquisition from RSS feeds and web pages
-- **Synthetic Data Generation**: High-quality synthetic training data creation
-- **Consciousness Data**: Specialized datasets for consciousness and reasoning training
+Default ports (configurable in `.env` file):
 
-### 🏗️ **Network & Infrastructure**
-- **P2P Network**: Decentralized peer-to-peer communication
-- **Hardware Tier System**: Automatic hardware detection and contribution scaling
-- **Load Balancing**: Dynamic batch sizing based on available memory (90% utilization)
-- **Fault Tolerance**: Robust error handling and recovery mechanisms
-- **Real-time Monitoring**: Comprehensive metrics and health monitoring
+| Service | Port | Protocol |
+|---------|------|----------|
+| DHT | 13337 | libp2p |
+| Geth P2P | 30303 | devp2p |
+| Geth HTTP | 8545 | JSON-RPC |
+| Geth AuthRPC | 8551 | JWT |
+| Prysm gRPC | 4000 | gRPC |
+| Prysm REST | 3500 | HTTP |
+| Prysm P2P | 13000 | libp2p |
+| AI Engine | 8552 | HTTP |
 
-### 💰 **Economic System**
-- **POL Token Rewards**: Proportional rewards based on training contribution
-- **Stake-Based Validation**: Minimum stake requirements for validators and authorities
-- **Reward Multipliers**: Bonus rewards for high-quality data and improvements
-- **Training Incentives**: Economic incentives aligned with model improvement
-- **Proportional Distribution**: Fair reward distribution based on actual contribution
-
-## 🛠️ **Quick Start**
+## Quick Start
 
 ### Prerequisites
-- Python 3.9+
-- CUDA-compatible GPU (recommended)
-- 8GB+ RAM minimum (48GB+ for whale tier)
+- Docker & Docker Compose
+- 16GB+ RAM (for DeepSeek-R1 model)
+- NVIDIA GPU (recommended)
 
-### Installation
+### 1. First Startup
+
+**Create `.env` file with your configuration:**
+```bash
+# Create .env file
+cat > .env << 'EOF'
+# POL-AI Hybrid Chain Configuration
+
+# Genesis seed for deterministic validator generation (64 hex characters)
+# Generate with: openssl rand -hex 32
+GENESIS_SEED=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+# Network configuration
+GENESIS_HOST=localhost
+
+# AI Configuration
+AI_QUORUM=auto
+
+# Optional: Custom ports (defaults shown)
+DHT_PORT=13337
+GETH_HTTP_PORT=8545
+GETH_P2P_PORT=30303
+GETH_AUTH_PORT=8551
+PRYSM_GRPC_PORT=4000
+PRYSM_REST_PORT=3500
+PRYSM_P2P_PORT=13000
+AI_ENGINE_PORT=8552
+EOF
+
+# Generate a unique GENESIS_SEED (recommended)
+GENESIS_SEED=$(openssl rand -hex 32)
+sed -i "s/GENESIS_SEED=.*/GENESIS_SEED=$GENESIS_SEED/" .env
+```
+
+**For Windows users:**
+```cmd
+REM Create .env file manually with these contents:
+echo # POL-AI Hybrid Chain Configuration > .env
+echo. >> .env
+echo # Genesis seed for deterministic validator generation >> .env
+echo GENESIS_SEED=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef >> .env
+echo. >> .env
+echo # Network configuration >> .env
+echo GENESIS_HOST=localhost >> .env
+echo. >> .env
+echo # AI Configuration >> .env
+echo AI_QUORUM=auto >> .env
+
+REM Then replace the default GENESIS_SEED with a unique one if desired
+```
+
+**Build and start the network:**
+```bash
+# Build Docker images
+docker-compose build
+
+# Start all services
+docker-compose up -d
+
+# Watch logs
+docker-compose logs -f
+```
+
+### 2. First Block Finalization
+
+The network will automatically:
+1. Start DHT daemon in solo mode
+2. Load DeepSeek-R1 model (cached)
+3. Generate deterministic genesis validator 
+4. Begin PoW mining with AI validation
+5. **First block finalizes with 1-node quorum**
+
+### 3. Common Commands
+
+**Monitor logs:**
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f geth
+docker-compose logs -f prysm-beacon
+docker-compose logs -f ai-trainer
+```
+
+**Manage services:**
+```bash
+# Stop all services
+docker-compose down
+
+# Restart a specific service
+docker-compose restart geth
+
+# View running containers
+docker-compose ps
+```
+
+### 4. Add Validators
 
 ```bash
-# Clone repository
-git clone https://github.com/your-org/cloady.git && cd Cloady
-
-# Create virtual environment
-python3 -m venv venv && source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install package
-pip install -e .
+# Additional validators join via standard deposits
+# Committee size scales automatically: quorum = max(1, ceil(validators/2))
 ```
 
-### Configuration
+## Environment Variables
 
-Create a `production_config.json` file:
+All configuration is stored in `.env` file (created from `env.example`):
 
-```json
-{
-  "node": {
-    "node_id": "your_node_id",
-    "port": 8000,
-    "is_authority": false,
-    "boot_nodes": [],
-    "training_enabled": true,
-    "private_key": "your_private_key"
-  },
-  "ai_training": {
-    "model_type": "revolutionary",
-    "vocab_size": 50257,
-    "embed_dim": 1024,
-    "num_heads": 16,
-    "num_layers": 16,
-    "max_seq_length": 2048,
-    "batch_size": 8,
-    "learning_rate": 2e-5,
-    "load_pretrained_base": true,
-    "adapt_architecture_to_pretrained": true,
-    "extract_pretrained_training_data": true,
-    "pretrained_model_priority": [
-      "EleutherAI/gpt-j-6B",
-      "EleutherAI/gpt-neo-2.7B",
-      "microsoft/DialoGPT-large"
-    ]
-  }
-}
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GENESIS_SEED` | generated | Deterministic seed for genesis validator (64 hex chars) |
+| `GENESIS_HOST` | localhost | Bootstrap peer for DHT discovery |
+| `AI_QUORUM` | auto | Manual ACK quorum override |
+| `DHT_PORT` | 13337 | DHT service port |
+| `GETH_HTTP_PORT` | 8545 | Geth JSON-RPC port |
+| `GETH_AUTH_PORT` | 8551 | Geth AuthRPC port |
+| `PRYSM_GRPC_PORT` | 4000 | Prysm gRPC port |
+| `PRYSM_REST_PORT` | 3500 | Prysm REST API port |
+| `AI_ENGINE_PORT` | 8552 | AI Engine port |
+| `SLASHER_PORT` | 4003 | Prysm Slasher gRPC port |
+
+## Architecture Details
+
+### LoRA Training
+- **r=8, α=16, dropout=0.05**
+- Target modules: Q/K/V/O + MLP layers
+- AdamW optimizer (lr=1e-4, β1=0.9, β2=0.95)
+- LoRA δW ≤150KB FP16, published to DHT
+
+### Loss Gate Validation
+- 512 DEV_TEXTS (readable sentences ≤256 chars)
+- Accept if `loss_after < 0.999 × loss_before`
+- Skip gate if `loss_before < 0.05`
+- Slashing for failed validation
+
+### ACK Quorum Protocol
+1. **Committee formation**: Prysm computes committee for block's slot (currently all active validators)
+2. **Peer ID derivation**: `peerID = sha256(pubkey)[:8]` for each committee member  
+3. **ML validation**: `local_averager.py` runs loss gate on committee members
+4. **ACK publishing**: Valid updates → `ack:{updateID[:16]}:{peerID}` = `0x01` (hex format, TTL 3600s)
+5. **Block format**: Binary ExtraData = `[32 bytes parentHash][32 bytes updateID]` (64 bytes total)
+6. **Consensus validation**: Prysm counts ACKs only from committee members for that slot
+7. **Quorum requirement**: votes ≥ max(1, ceil(committee_size/2)) to accept, otherwise slash proposer
+8. **Timeout handling**: 30s timeout → empty AI block (updateID = 32 zero bytes)
+
+### Consensus Flow
+```
+Training Layer:    Trainer → LoRA δW → DHT
+Validation Layer:  Averager → Loss Gate → ACK Publication  
+Consensus Layer:   Engine → PoW Block → Prysm ACK Count → Finality
 ```
 
-### Running a Node
+## Volume Mounts
 
+| Volume | Purpose |
+|--------|---------|
+| `chain_data/` | Blockchain state |
+| `dht_db/` | DHT persistence |
+| `model_cache/` | DeepSeek-R1 + LoRA deltas |
+| `secrets_data/` | JWT secrets |
+
+## CLI Examples
+
+### Geth
 ```bash
-# Start a training node
-python -m pol.cli run --config-file production_config.json --training
-
-# Start API server only
-python -m pol.cli api --config-file production_config.json
-
-# Start with specific hardware tier
-python -m pol.cli run --config-file production_config.json --tier whale
+geth --externalcl ./engine/ai_engine --jwtsecret jwt.hex
 ```
 
-## 🏗️ **Architecture Overview**
-
-### Core Components
-
-| Component | Description |
-|-----------|-------------|
-| **AI Engine** | Revolutionary AI training with pretrained model integration |
-| **Blockchain** | Immutable training progress and consensus validation |
-| **Data Engine** | Internet-scale data acquisition with lineage tracking |
-| **P2P Network** | Decentralized communication and peer discovery |
-| **Consensus** | Proof-of-learning validation and authority management |
-| **Wallet** | POL token management and reward distribution |
-
-### Hardware Tiers
-
-| Tier | Memory | Batch Size | Gradient Acc | Expected Blocks/h |
-|------|--------|------------|--------------|-------------------|
-| **Whale** | 48GB+ | 16-32 | 2 | 12-24 |
-| **Miner** | 16GB+ | 8-16 | 4 | 6-12 |
-| **Participant** | 8GB+ | 4-8 | 8 | 2-4 |
-| **Mobile** | <8GB | 2-4 | 16 | 1 |
-
-All tiers train the **same model architecture** - only batch parameters vary.
-
-## 🔌 **API Endpoints**
-
-### Core Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/generate` | POST | Text generation with consciousness insights |
-| `/train` | POST | Trigger training epoch |
-| `/metrics` | GET | Training and blockchain metrics |
-| `/peers` | GET | Connected peer information |
-| `/wallet` | GET | Wallet balance and transaction history |
-| `/consensus` | GET | Consensus state and validation info |
-
-### Advanced Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/data-lineage` | GET | Data lineage and consumption tracking |
-| `/training-deltas` | GET | Training improvement deltas |
-| `/pretrained-models` | GET | Available pretrained models |
-| `/consciousness` | GET | Model consciousness and reasoning metrics |
-| `/rewards` | GET | Reward distribution and statistics |
-
-## 🧪 **Testing & Validation**
-
-### Test Scripts
-
+### Prysm  
 ```bash
-# Test pretrained model integration
-python test_pretrained_integration.py
-
-# Test delta-based training system
-python test_delta_training.py
-
-# Run comprehensive test suite
-python -m pytest tests/
+prysm.sh beacon-chain --execution-endpoint http://localhost:8551 \
+  --jwt-secret jwt.hex --ai-quorum auto
 ```
 
-### Validation Features
-
-- **Training Proof Validation**: Cryptographic proof of training work
-- **Gradient Authenticity**: Verify gradients match claimed training
-- **Computation Verification**: Validate computational work performed
-- **Anti-Gaming Detection**: Prevent fake training submissions
-- **Cross-Node Validation**: Multiple validators confirm training proofs
-
-## 📊 **Monitoring & Analytics**
-
-### Training Metrics
-
-- **Loss Progression**: Real-time training loss tracking
-- **Consciousness Level**: Model self-awareness metrics
-- **Reasoning Quality**: Logical reasoning capability assessment
-- **Quantum Coherence**: Quantum-inspired processing effectiveness
-- **Expert Utilization**: MoE expert activation patterns
-
-### Data Analytics
-
-- **Source Distribution**: Training data by source type
-- **Quality Scores**: Data quality assessment over time
-- **Consumption Rates**: Data utilization efficiency
-- **Reward Distribution**: Economic incentive analysis
-- **Lineage Tracking**: Complete data provenance
-
-### Network Health
-
-- **Peer Connectivity**: Network topology and health
-- **Consensus Participation**: Validator activity and performance
-- **Block Production**: Blockchain growth and stability
-- **Stake Distribution**: Token distribution and concentration
-
-## 🔧 **Advanced Configuration**
-
-### AI Training Options
-
-```json
-{
-  "ai_training": {
-    "consciousness_tracking": true,
-    "quantum_processing": true,
-    "mixture_of_experts": true,
-    "self_modification": true,
-    "chain_of_thought": true,
-    "symbolic_reasoning": true,
-    "multimodal_support": true
-  }
-}
-```
-
-### Data Acquisition Settings
-
-```json
-{
-  "data_acquisition": {
-    "enable_web_scraping": true,
-    "huggingface_datasets": true,
-    "pretrained_extraction": true,
-    "synthetic_generation": true,
-    "quality_threshold": 0.7,
-    "max_tokens_per_source": 1000000
-  }
-}
-```
-
-### Blockchain Configuration
-
-```json
-{
-  "blockchain": {
-    "difficulty": 4,
-    "block_time": 60,
-    "consensus_threshold": 0.67,
-    "minimum_stake": 1000,
-    "reward_multiplier": 1.5
-  }
-}
-```
-
-## 🔐 **Security Features**
-
-### Training Security
-- **Gradient Authenticity Verification**
-- **Computation Proof Validation**
-- **Timing Manipulation Detection**
-- **Pattern Spoofing Prevention**
-- **Cross-Node Collusion Detection**
-
-### Network Security
-- **Encrypted P2P Communication**
-- **Peer Identity Verification**
-- **DDoS Protection**
-- **Rate Limiting**
-- **Sybil Attack Prevention**
-
-### Economic Security
-- **Stake-Based Validation**
-- **Reward Audit Trail**
-- **Economic Attack Prevention**
-- **Fair Distribution Mechanisms**
-
-## 🌟 **Revolutionary Features**
-
-### Consciousness Simulation
-- **Self-Awareness Tracking**: Real-time consciousness level monitoring
-- **Introspective Attention**: Model thinking about its own thinking
-- **Emotional State Simulation**: Emotional context in reasoning
-- **Meta-Cognitive Processing**: Higher-order thinking patterns
-
-### Quantum-Inspired Processing
-- **Superposition States**: Multiple reasoning paths simultaneously
-- **Entanglement Operations**: Correlated reasoning across contexts
-- **Quantum Interference**: Pattern enhancement through interference
-- **Coherence Measurement**: Quantum coherence tracking
-
-### Advanced Reasoning
-- **Chain-of-Thought**: Multi-step reasoning with explicit steps
-- **Tree Search**: Optimal reasoning path exploration
-- **Symbolic Logic**: Formal reasoning with symbols
-- **Meta-Learning**: Learning how to learn better
-
-## 🛣️ **Roadmap**
-
-### Phase 1: Foundation (Completed)
-- ✅ Basic blockchain infrastructure
-- ✅ Proof-of-learning consensus
-- ✅ Simple AI training integration
-- ✅ P2P network implementation
-
-### Phase 2: Enhancement (Completed)
-- ✅ Pretrained model integration
-- ✅ Data lineage tracking
-- ✅ Delta-based training
-- ✅ Revolutionary AI features
-
-### Phase 3: Scaling (In Progress)
-- 🔄 Larger context windows (4096+)
-- 🔄 Flash Attention optimization
-- 🔄 Checkpoint sharding
-- 🔄 Gossip-based synchronization
-
-### Phase 4: Advanced Features (Planned)
-- 📋 Multimodal training (vision, audio)
-- 📋 Cross-chain interoperability
-- 📋 Advanced economic mechanisms
-- 📋 Governance system
-
-## 📖 **Documentation**
-
-### Development Guide
-- **Architecture Overview**: System design and components
-- **API Reference**: Complete API documentation
-- **Training Guide**: How to train models effectively
-- **Node Operation**: Running and maintaining nodes
-
-### Technical Specifications
-- **Consensus Algorithm**: Proof-of-learning details
-- **Blockchain Protocol**: Block structure and validation
-- **AI Architecture**: Model design and training
-- **Network Protocol**: P2P communication specs
-
-## 🤝 **Contributing**
-
-### Development Setup
+### Trainer
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-python -m pytest tests/
-
-# Code formatting
-black pol/
-flake8 pol/
-
-# Type checking
-mypy pol/
+python3 ai/trainer.py --peer-id <hex> --steps 1000
 ```
 
-### Contribution Guidelines
-- **Code Style**: Follow PEP 8 and use Black formatting
-- **Testing**: Write comprehensive tests for new features
-- **Documentation**: Update documentation for API changes
-- **Security**: Security review required for consensus changes
+### DHT Daemon
+```bash
+python3 dht_daemon.py --listen 0.0.0.0:13337 --solo
+```
 
-## 📄 **License**
+## Development
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Build Individual Components
+```bash
+# AI components
+docker build -f Dockerfile.ai -t pol-ai .
 
-## 🏆 **Achievements**
+# Engine
+docker build -f Dockerfile.engine -t pol-engine .
 
-- **State-of-the-Art AI**: Revolutionary model architecture beyond GPT-4
-- **Blockchain Innovation**: First proof-of-learning consensus mechanism
-- **Data Lineage**: Complete training data provenance tracking
-- **Economic Incentives**: Fair reward distribution based on contribution
-- **Consciousness Simulation**: First AI system with consciousness tracking
-- **Quantum Processing**: Quantum-inspired reasoning capabilities
+# DHT
+docker build -f Dockerfile.dht -t pol-dht .
 
-## 📞 **Support**
+# Prysm
+docker build -f Dockerfile.prysm -t pol-prysm .
+```
 
-- **Documentation**: [docs.cloady.ai](https://docs.cloady.ai)
-- **Community**: [Discord](https://discord.gg/cloady)
-- **Issues**: [GitHub Issues](https://github.com/your-org/cloady/issues)
-- **Email**: support@cloady.ai
+### Manual Testing
+```bash
+# Test DHT connectivity
+curl http://localhost:13337/dht/peers
+
+# Check Geth sync
+curl -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+  http://localhost:8545
+
+# Prysm beacon status  
+curl http://localhost:3500/eth/v1/beacon/headers/head
+```
+
+## Network Behavior
+
+### Genesis (1 Validator)
+- Committee size: 1
+- ACK quorum: 1  
+- Solo DHT bootstrap
+- Immediate finalization
+
+### Multi-Validator (N Validators)
+- Committee size: N
+- ACK quorum: ceil(N/2)
+- DHT mesh network
+- Byzantine fault tolerance
+
+### AI Validation
+- **Committee members**: Run loss gate in `local_averager.py`
+- ✅ **Valid**: Loss improvement → ACK publication → Block acceptance  
+- ❌ **Invalid**: No improvement → No ACK → Insufficient quorum → Slashing
+- ⏰ **Timeout**: No ACKs within 30s → Empty AI block → Continue
+
+## Security
+
+### Sybil Resistance
+- **Committee membership**: Only active validators (32 POL stake) selected for specific slot
+- **ACK authenticity**: libp2p ED25519 signatures from DHT 
+- **Vote restriction**: Prysm only counts ACKs from exact committee members (no random peers)
+- **Loss gate validation**: Each committee member independently verifies ML improvements
+
+### Slashing Conditions
+- **Invalid AI update**: Failed ACK quorum → ProposerSlashing via gRPC to Prysm slasher
+- **Proposer equivocation**: Standard double-signing detection
+- **Committee malfeasance**: Invalid ML validation by committee members
+- **Slashing integration**: Connects to Prysm slasher on port 4003, broadcasts via gossipsub
+
+## Performance
+
+### Throughput
+- Block time: 12 seconds (Prysm standard)
+- AI validation: ~5-30 seconds per update
+- LoRA δW: ≤150KB per update
+
+### Resource Requirements
+- **CPU**: 8+ cores
+- **RAM**: 16GB+ (model loading)
+- **Storage**: 100GB+ (chain + model data)
+- **GPU**: NVIDIA recommended (training)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Model download fails**
+   ```bash
+   # Check internet connectivity and HuggingFace access
+   docker-compose logs ai-trainer
+   ```
+
+2. **DHT connectivity problems**
+   ```bash
+   # Verify port 13337 is accessible
+   docker-compose logs dht-daemon
+   ```
+
+3. **Genesis not starting**
+   ```bash
+   # Check GENESIS_SEED format (64-char hex)
+   echo $GENESIS_SEED
+   # Should be exactly 64 hexadecimal characters (0-9, a-f, A-F)
+   ```
+
+4. **Prysm won't sync**
+   ```bash
+   # Verify JWT secret matches between Geth and Prysm
+   docker-compose exec geth cat /secrets/jwt.hex
+   docker-compose exec prysm-beacon cat /secrets/jwt.hex
+   ```
+
+### Log Analysis
+```bash
+# AI ACK quorum validation logs
+docker-compose logs prysm-beacon | grep "ACK quorum"
+
+# ML validation logs (loss gate)  
+docker-compose logs ai-averager | grep "Loss gate"
+
+# ACK publication logs
+docker-compose logs ai-averager | grep "ACK"
+
+# Training progress
+docker-compose logs ai-trainer | grep "Step"
+```
+
+## License
+
+MIT License - See LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Test with single-node setup
+4. Submit pull request
 
 ---
 
-**Built with ❤️ by the Cloady Team**
-
-*Revolutionizing AI training through blockchain consensus and collaborative learning* 
+**Note**: This is a proof-of-concept implementation. Production use requires additional security audits, testing, and optimizations. 

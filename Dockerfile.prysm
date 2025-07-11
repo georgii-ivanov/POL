@@ -1,0 +1,31 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache git gcc musl-dev bash make python3 py3-pip openjdk11-jre wget
+
+RUN git clone https://github.com/prysmaticlabs/prysm.git
+WORKDIR /app/prysm
+
+COPY prysm/ack_quorum.go ./beacon-chain/core/ai/
+COPY prysm/go.mod ./ai-patch/
+
+RUN go mod tidy
+
+RUN wget -O /usr/local/bin/bazel https://github.com/bazelbuild/bazel/releases/download/6.4.0/bazel-6.4.0-linux-x86_64 && chmod +x /usr/local/bin/bazel
+
+RUN bazel build //beacon-chain:beacon-chain --config=release
+
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/prysm/bazel-bin/beacon-chain/beacon-chain_/beacon-chain /usr/local/bin/
+
+COPY genesis/ /data/
+
+EXPOSE 4000 3500 13000
+
+CMD ["beacon-chain", "--datadir", "/data"] 
