@@ -1,0 +1,88 @@
+{
+  "name": "POL-AI Development Environment",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylint",
+        "ms-python.black-formatter",
+        "ms-vscode.vscode-json",
+        "ms-vscode.docker",
+        "golang.go",
+        "redhat.vscode-yaml",
+        "ms-kubernetes-tools.vscode-kubernetes-tools"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "editor.formatOnSave": true,
+        "files.autoSave": "afterDelay",
+        "files.autoSaveDelay": 1000
+      }
+    }
+  },
+  "forwardPorts": [
+    8551,
+    8552,
+    8080,
+    30303,
+    13000,
+    12000,
+    4001
+  ],
+  "portsAttributes": {
+    "8551": {
+      "label": "AI Engine Auth",
+      "onAutoForward": "notify"
+    },
+    "8552": {
+      "label": "AI Engine API",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "POL API",
+      "onAutoForward": "notify"
+    },
+    "30303": {
+      "label": "Ethereum P2P",
+      "onAutoForward": "silent"
+    },
+    "13000": {
+      "label": "Prysm Beacon",
+      "onAutoForward": "silent"
+    },
+    "12000": {
+      "label": "Prysm P2P",
+      "onAutoForward": "silent"
+    },
+    "4001": {
+      "label": "DHT P2P",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "vscode",
+      "userUid": "1000",
+      "userGid": "1000"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    }
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ]
+} 

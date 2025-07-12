@@ -1,21 +1,7 @@
 version: '3.8'
 
 services:
-  init-secrets:
-    image: alpine:latest
-    command: >
-      sh -c "
-        if [ ! -f /secrets/jwt.hex ]; then
-          apk add --no-cache openssl &&
-          openssl rand -hex 32 > /secrets/jwt.hex &&
-          echo 'Generated JWT secret'
-        else
-          echo 'JWT secret already exists'
-        fi
-      "
-    volumes:
-      - secrets_data:/secrets
-
+  # DHT daemon for peer discovery
   dht-daemon:
     build:
       context: .
@@ -24,113 +10,31 @@ services:
       - "${DHT_PORT:-13337}:13337"
     environment:
       - GENESIS_HOST=${GENESIS_HOST:-localhost}
-      - GENESIS_SEED=${GENESIS_SEED}
     volumes:
-      - dht_db:/dht_db
-    networks:
-      - pol-network
+      - ./dht_db:/dht_db
     restart: unless-stopped
-    command: >
-      python3 dht_daemon.py 
-      --listen 0.0.0.0:13337 
-      --solo 
-      --persistence-dir /dht_db 
-      --log-level INFO
+    command: ["python3", "dht_daemon.py", "--listen", "0.0.0.0:13337", "--solo"]
 
-  ai-trainer:
-    build:
-      context: .
-      dockerfile: Dockerfile.ai
-    environment:
-      - GENESIS_HOST=${GENESIS_HOST:-localhost}
-      - GENESIS_SEED=${GENESIS_SEED}
-    volumes:
-      - model_cache:/model_cache
-      - dht_db:/dht_db
-    networks:
-      - pol-network
-    depends_on:
-      - dht-daemon
-    restart: unless-stopped
-    command: >
-      python3 ai/trainer.py 
-      --steps 1000
-
-  ai-averager:
-    build:
-      context: .
-      dockerfile: Dockerfile.ai
-    environment:
-      - GENESIS_HOST=${GENESIS_HOST:-localhost}
-      - GENESIS_SEED=${GENESIS_SEED}
-    volumes:
-      - model_cache:/model_cache
-      - dht_db:/dht_db
-    networks:
-      - pol-network
-    depends_on:
-      - dht-daemon
-      - ai-trainer
-    restart: unless-stopped
-    command: >
-      python3 ai/local_averager.py
-
-  ai-engine:
-    build:
-      context: .
-      dockerfile: Dockerfile.engine
-    ports:
-      - "${AI_ENGINE_PORT:-8552}:8552"
-    environment:
-      - GENESIS_HOST=${GENESIS_HOST:-localhost}
-      - ENGINE_PORT=${AI_ENGINE_PORT:-8552}
-      - GETH_RPC_URL=http://geth:8545
-    volumes:
-      - dht_db:/dht_db
-    networks:
-      - pol-network
-    depends_on:
-      - dht-daemon
-    restart: unless-stopped
-
+  # Geth execution client with AI engine
   geth:
-    image: ethereum/client-go:v1.13.8
+    build:
+      context: .
+      dockerfile: Dockerfile.geth
     ports:
-      - "${GETH_P2P_PORT:-30303}:30303"
       - "${GETH_HTTP_PORT:-8545}:8545"
+      - "${GETH_P2P_PORT:-30303}:30303"
       - "${GETH_AUTH_PORT:-8551}:8551"
     volumes:
-      - chain_data:/root/.ethereum
-      - secrets_data:/secrets
-    networks:
-      - pol-network
+      - ./chain_data:/chain_data
+      - ./secrets_data:/secrets
+    environment:
+      - GENESIS_SEED=${GENESIS_SEED}
+      - AI_ENGINE_PORT=${AI_ENGINE_PORT:-8552}
     depends_on:
-      - init-secrets
-      - ai-engine
+      - dht-daemon
     restart: unless-stopped
-    command: >
-      geth
-      --datadir /root/.ethereum
-      --networkid 1337
-      --port 30303
-      --http
-      --http.addr 0.0.0.0
-      --http.port 8545
-      --http.api eth,net,web3,debug,admin,txpool
-      --http.corsdomain "*"
-      --authrpc.addr 0.0.0.0
-      --authrpc.port 8551
-      --authrpc.jwtsecret /secrets/jwt.hex
-      --allow-insecure-unlock
-      --unlock 0x0000000000000000000000000000000000000000
-      --password /dev/null
-      --mine
-      --miner.etherbase 0x0000000000000000000000000000000000000000
-      --externalcl http://ai-engine:8552
-      --syncmode full
-      --gcmode archive
-      --verbosity 3
 
+  # Prysm beacon chain with ACK quorum
   prysm-beacon:
     build:
       context: .
@@ -140,50 +44,78 @@ services:
       - "${PRYSM_REST_PORT:-3500}:3500"
       - "${PRYSM_P2P_PORT:-13000}:13000"
     volumes:
-      - chain_data:/data
-      - secrets_data:/secrets
-      - model_cache:/model_cache
-    networks:
-      - pol-network
+      - ./chain_data:/chain_data
+      - ./secrets_data:/secrets
     environment:
-      - GENESIS_HOST=${GENESIS_HOST:-localhost}
       - GENESIS_SEED=${GENESIS_SEED}
       - AI_QUORUM=${AI_QUORUM:-auto}
     depends_on:
-      - init-secrets
       - geth
+    restart: unless-stopped
+
+  # AI trainer with GPU support
+  ai-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - GENESIS_HOST=${GENESIS_HOST:-localhost}
+      - DHT_PORT=${DHT_PORT:-13337}
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./model_cache:/model_cache
+      - ./data_cache:/data_cache
+    depends_on:
       - dht-daemon
     restart: unless-stopped
-    command: >
-      beacon-chain
-      --datadir /data
-      --rpc-host 0.0.0.0
-      --rpc-port 4000
-      --grpc-gateway-host 0.0.0.0
-      --grpc-gateway-port 3500
-      --p2p-host-ip 0.0.0.0
-      --p2p-tcp-port 13000
-      --execution-endpoint http://geth:8551
-      --jwt-secret /secrets/jwt.hex
-      --accept-terms-of-use
-      --genesis-state /data/genesis.ssz
-      --chain-config-file /data/config.yaml
-      --ai-quorum auto
-      --verbosity info
+    command: ["python3", "ai/trainer.py", "--auto-data", "--steps", "1000"]
 
-networks:
-  pol-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+  # AI averager for loss gate validation with GPU support
+  ai-averager:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - GENESIS_HOST=${GENESIS_HOST:-localhost}
+      - DHT_PORT=${DHT_PORT:-13337}
+      - PRYSM_GRPC_PORT=${PRYSM_GRPC_PORT:-4000}
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./model_cache:/model_cache
+    depends_on:
+      - dht-daemon
+      - prysm-beacon
+    restart: unless-stopped
+    command: ["python3", "ai/local_averager.py"]
 
-volumes:
-  chain_data:
-    driver: local
-  dht_db:
-    driver: local
-  model_cache:
-    driver: local
-  secrets_data:
-    driver: local 
+  # AI engine for block validation
+  ai-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.engine
+    ports:
+      - "${AI_ENGINE_PORT:-8552}:8552"
+    environment:
+      - DHT_PORT=${DHT_PORT:-13337}
+      - GENESIS_HOST=${GENESIS_HOST:-localhost}
+    volumes:
+      - ./model_cache:/model_cache
+    depends_on:
+      - dht-daemon
+    restart: unless-stopped 

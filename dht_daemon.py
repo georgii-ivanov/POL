@@ -8,7 +8,6 @@ import logging
 from typing import List, Optional
 import signal
 import time
-import json
 from dataclasses import dataclass, field
 import hivemind
 from hivemind import DHT, get_logger

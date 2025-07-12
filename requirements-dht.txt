@@ -1,7 +1,1 @@
-hivemind>=1.1.5
-libp2p>=0.2.0
-async-timeout>=4.0.2
-protobuf>=4.21.0
-grpcio>=1.50.0
-cryptography>=39.0.0
-pynacl>=1.5.0 
+hivemind>=1.1.10.post2
